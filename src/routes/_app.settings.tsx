@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 function SettingsPage() {
-  const { resetData, currentUser } = useStore();
+  const { currentUser, refresh } = useStore();
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
@@ -35,14 +35,13 @@ function SettingsPage() {
         <CardContent className="text-sm space-y-3">
           <div className="flex items-center justify-between">
             <span>Status</span>
-            <Badge className="bg-success text-success-foreground">Offline · Local cache</Badge>
+            <Badge className="bg-success text-success-foreground">Connected</Badge>
           </div>
           <p className="text-muted-foreground text-xs">
-            This prototype stores data in your browser. Cloud sync activates
-            automatically when the backend is connected.
+            Data is stored securely in Lovable Cloud and synced across devices in real time.
           </p>
-          <Button variant="outline" size="sm" onClick={() => toast.info("Will sync once cloud is connected.")}>
-            <RefreshCw className="h-3 w-3 mr-1" /> Sync now
+          <Button variant="outline" size="sm" onClick={async () => { await refresh(); toast.success("Refreshed from cloud"); }}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Refresh now
           </Button>
         </CardContent>
       </Card>
@@ -55,19 +54,9 @@ function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted-foreground">
-            Reset all demo data back to the seed (products, sales, suppliers, audit log, users).
+            All pharmacy data is stored in your Lovable Cloud backend with role-based access control.
+            Use the Products, Suppliers, and Users pages to manage records.
           </p>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (confirm("Reset all data to seed?")) {
-                resetData();
-                toast.success("Data reset");
-              }
-            }}
-          >
-            Reset demo data
-          </Button>
         </CardContent>
       </Card>
     </div>
