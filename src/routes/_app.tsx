@@ -1,7 +1,10 @@
-import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 const titles: Record<string, string> = {
   "/": "Dashboard",
@@ -18,23 +21,59 @@ const titles: Record<string, string> = {
 
 export const Route = createFileRoute("/_app")({
   ssr: false,
-  beforeLoad: () => {
-    if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("pharma-session-v1");
-    if (!raw) throw redirect({ to: "/auth" });
-  },
   component: AppLayout,
 });
 
 function AppLayout() {
-  const { currentUser } = useStore();
+  const { currentUser, loading } = useStore();
+  const navigate = useNavigate();
+  const [checkedAuth, setCheckedAuth] = useState(false);
+
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const title =
     titles[pathname] ??
     titles[Object.keys(titles).find((k) => k !== "/" && pathname.startsWith(k)) ?? ""] ??
     "MediStock";
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) navigate({ to: "/auth" });
+      setCheckedAuth(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (!session) navigate({ to: "/auth" });
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [navigate]);
+
+  if (!checkedAuth || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
+        <h1 className="text-xl font-semibold mb-2">No role assigned</h1>
+        <p className="text-muted-foreground text-sm max-w-md">
+          Your account exists but no role has been assigned yet. Ask an Owner or
+          Manager to assign you a role.
+        </p>
+        <button
+          className="mt-4 text-sm text-accent underline"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            navigate({ to: "/auth" });
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background">

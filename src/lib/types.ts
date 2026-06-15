@@ -7,7 +7,7 @@ export interface User {
   phone: string;
   role: Role;
   status: "active" | "disabled";
-  password: string; // mock only
+  password?: string; // unused with real auth; kept for UI compatibility
   createdAt: string;
 }
 
@@ -32,7 +32,7 @@ export interface Product {
   quantity: number;
   reorderLevel: number;
   batchNumber: string;
-  expiryDate: string; // ISO
+  expiryDate: string; // ISO date
   description: string;
   createdAt: string;
   updatedAt: string;
@@ -43,7 +43,7 @@ export interface InventoryMovement {
   id: string;
   productId: string;
   type: MovementType;
-  quantity: number; // signed; for adjustment this is the delta
+  quantity: number;
   previousQty?: number;
   newQty?: number;
   reason?: string;
