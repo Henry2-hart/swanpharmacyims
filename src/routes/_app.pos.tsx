@@ -35,7 +35,7 @@ function POSPage() {
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(5);
   const [pay, setPay] = useState<PaymentMethod>("cash");
-  const [receipt, setReceipt] = useState<null | ReturnType<typeof addSale>>(null);
+  const [receipt, setReceipt] = useState<import("@/lib/types").Sale | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -103,9 +103,9 @@ function POSPage() {
   const taxAmt = Math.round(((subtotal - discount) * taxRate) / 100);
   const total = Math.max(0, subtotal - discount + taxAmt);
 
-  const checkout = () => {
+  const checkout = async () => {
     if (cart.length === 0) return toast.error("Cart is empty");
-    const sale = addSale({
+    const sale = await addSale({
       items: cart,
       subtotal,
       discount,
@@ -113,6 +113,7 @@ function POSPage() {
       total,
       paymentMethod: pay,
     });
+    if (!sale) return toast.error("Failed to record sale");
     toast.success(`Sale ${sale.saleNumber} completed`);
     setReceipt(sale);
     setCart([]);

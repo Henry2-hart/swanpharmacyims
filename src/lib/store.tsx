@@ -7,25 +7,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  seedAudit,
-  seedMovements,
-  seedProducts,
-  seedSales,
-  seedSuppliers,
-  seedUsers,
-} from "./mock-data";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   AuditLog,
   InventoryMovement,
   Product,
+  Role,
   Sale,
   Supplier,
   User,
 } from "./types";
-
-const STORAGE_KEY = "pharma-store-v1";
-const SESSION_KEY = "pharma-session-v1";
 
 interface StoreData {
   users: User[];
@@ -38,226 +29,415 @@ interface StoreData {
 
 interface StoreContextValue extends StoreData {
   currentUser: User | null;
-  login: (email: string, password: string) => User | null;
-  logout: () => void;
-  resetData: () => void;
+  loading: boolean;
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
   // products
-  upsertProduct: (p: Product) => void;
-  deleteProduct: (id: string) => void;
+  upsertProduct: (p: Product) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   // suppliers
-  upsertSupplier: (s: Supplier) => void;
-  deleteSupplier: (id: string) => void;
+  upsertSupplier: (s: Supplier) => Promise<void>;
+  deleteSupplier: (id: string) => Promise<void>;
   // users
-  upsertUser: (u: User) => void;
-  toggleUserStatus: (id: string) => void;
+  upsertUser: (u: User) => Promise<void>;
+  toggleUserStatus: (id: string) => Promise<void>;
   // inventory
-  addMovement: (m: Omit<InventoryMovement, "id" | "date" | "userId">) => void;
+  addMovement: (m: Omit<InventoryMovement, "id" | "date" | "userId">) => Promise<void>;
   // sales
-  addSale: (s: Omit<Sale, "id" | "saleNumber" | "date" | "cashierId">) => Sale;
+  addSale: (s: Omit<Sale, "id" | "saleNumber" | "date" | "cashierId">) => Promise<Sale | null>;
   // audit
-  log: (action: string, detail?: string) => void;
+  log: (action: string, detail?: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
-const initial = (): StoreData => ({
-  users: seedUsers,
-  suppliers: seedSuppliers,
-  products: seedProducts,
-  movements: seedMovements,
-  sales: seedSales,
-  audit: seedAudit,
+const emptyData: StoreData = {
+  users: [],
+  suppliers: [],
+  products: [],
+  movements: [],
+  sales: [],
+  audit: [],
+};
+
+// ---- mappers ----
+const mapSupplier = (r: any): Supplier => ({
+  id: r.id,
+  name: r.name,
+  contactPerson: r.contact_person ?? "",
+  phone: r.phone ?? "",
+  email: r.email ?? "",
+  address: r.address ?? "",
+  createdAt: r.created_at,
 });
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+const mapProduct = (r: any): Product => ({
+  id: r.id,
+  name: r.name,
+  genericName: r.generic_name ?? "",
+  category: r.category ?? "",
+  supplierId: r.supplier_id ?? "",
+  purchasePrice: Number(r.purchase_price ?? 0),
+  sellingPrice: Number(r.selling_price ?? 0),
+  quantity: Number(r.quantity ?? 0),
+  reorderLevel: Number(r.reorder_level ?? 0),
+  batchNumber: r.batch_number ?? "",
+  expiryDate: r.expiry_date ?? "",
+  description: r.description ?? "",
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapMovement = (r: any): InventoryMovement => ({
+  id: r.id,
+  productId: r.product_id,
+  type: r.type,
+  quantity: r.quantity,
+  previousQty: r.previous_qty ?? undefined,
+  newQty: r.new_qty ?? undefined,
+  reason: r.reason ?? "",
+  supplierId: r.supplier_id ?? undefined,
+  cost: r.cost != null ? Number(r.cost) : undefined,
+  date: r.created_at,
+  userId: r.user_id,
+});
+
+const mapSale = (r: any): Sale => ({
+  id: r.id,
+  saleNumber: r.sale_number,
+  date: r.created_at,
+  cashierId: r.cashier_id,
+  subtotal: Number(r.subtotal),
+  discount: Number(r.discount),
+  tax: Number(r.tax),
+  total: Number(r.total),
+  paymentMethod: r.payment_method,
+  items: (r.sale_items ?? []).map((i: any) => ({
+    productId: i.product_id,
+    name: i.name,
+    quantity: i.quantity,
+    unitPrice: Number(i.unit_price),
+    lineTotal: Number(i.line_total),
+  })),
+});
+
+const mapAudit = (r: any): AuditLog => ({
+  id: r.id,
+  userId: r.user_id,
+  action: r.action,
+  detail: r.detail ?? "",
+  timestamp: r.created_at,
+});
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<StoreData>(() => {
-    if (typeof window === "undefined") return initial();
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as StoreData) : initial();
-    } catch {
-      return initial();
+  const [data, setData] = useState<StoreData>(emptyData);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+
+  // ----- auth session sync -----
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionUserId(session?.user.id ?? null);
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSessionUserId(session?.user.id ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // ----- data fetch -----
+  const fetchAll = useCallback(async (uid: string | null) => {
+    if (!uid) {
+      setData(emptyData);
+      setCurrentUser(null);
+      setLoading(false);
+      return;
     }
-  });
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      return raw ? (JSON.parse(raw) as User) : null;
-    } catch {
-      return null;
+    setLoading(true);
+
+    // Profiles + roles
+    const [{ data: profiles }, { data: roles }] = await Promise.all([
+      supabase.from("profiles").select("*"),
+      supabase.from("user_roles").select("*"),
+    ]);
+    const roleMap = new Map<string, Role>();
+    (roles ?? []).forEach((r: any) => roleMap.set(r.user_id, r.role));
+    const users: User[] = (profiles ?? []).map((p: any) => ({
+      id: p.id,
+      fullName: p.full_name || p.email,
+      email: p.email,
+      phone: p.phone ?? "",
+      role: (roleMap.get(p.id) ?? "cashier") as Role,
+      status: p.status,
+      createdAt: p.created_at,
+    }));
+
+    const me = users.find((u) => u.id === uid) ?? null;
+    setCurrentUser(me);
+
+    // Need a role to query other tables
+    if (!me || !roleMap.get(uid)) {
+      setData({ ...emptyData, users });
+      setLoading(false);
+      return;
     }
-  });
+
+    const [
+      { data: suppliers },
+      { data: products },
+      { data: movements },
+      { data: sales },
+      { data: audit },
+    ] = await Promise.all([
+      supabase.from("suppliers").select("*").order("created_at", { ascending: false }),
+      supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase.from("inventory_movements").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase
+        .from("sales")
+        .select("*, sale_items(*)")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(500),
+    ]);
+
+    setData({
+      users,
+      suppliers: (suppliers ?? []).map(mapSupplier),
+      products: (products ?? []).map(mapProduct),
+      movements: (movements ?? []).map(mapMovement),
+      sales: (sales ?? []).map(mapSale),
+      audit: (audit ?? []).map(mapAudit),
+    });
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
-  useEffect(() => {
-    if (currentUser) localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
-    else localStorage.removeItem(SESSION_KEY);
-  }, [currentUser]);
+    fetchAll(sessionUserId);
+  }, [sessionUserId, fetchAll]);
 
+  const refresh = useCallback(() => fetchAll(sessionUserId), [fetchAll, sessionUserId]);
+
+  // ---- audit helper ----
   const log = useCallback(
-    (action: string, detail?: string) => {
-      setData((d) => ({
-        ...d,
-        audit: [
-          {
-            id: uid(),
-            userId: currentUser?.id ?? "system",
-            action,
-            detail,
-            timestamp: new Date().toISOString(),
-          },
-          ...d.audit,
-        ].slice(0, 500),
-      }));
+    async (action: string, detail?: string) => {
+      if (!sessionUserId) return;
+      await supabase
+        .from("audit_logs")
+        .insert({ user_id: sessionUserId, action, detail: detail ?? "" });
     },
-    [currentUser],
+    [sessionUserId],
   );
 
-  const login = useCallback(
-    (email: string, password: string) => {
-      const u = data.users.find(
-        (x) =>
-          x.email.toLowerCase() === email.toLowerCase() &&
-          x.password === password &&
-          x.status === "active",
-      );
-      if (u) {
-        setCurrentUser(u);
-        setData((d) => ({
-          ...d,
-          audit: [
-            {
-              id: uid(),
-              userId: u.id,
-              action: "LOGIN",
-              detail: `${u.fullName} signed in`,
-              timestamp: new Date().toISOString(),
-            },
-            ...d.audit,
-          ],
-        }));
-        return u;
-      }
-      return null;
-    },
-    [data.users],
-  );
-
-  const logout = useCallback(() => {
-    if (currentUser) log("LOGOUT", `${currentUser.fullName} signed out`);
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setData(emptyData);
     setCurrentUser(null);
-  }, [currentUser, log]);
+  }, []);
+
+  // ---- mutations ----
+  const upsertProduct = useCallback(
+    async (p: Product) => {
+      const payload = {
+        name: p.name,
+        generic_name: p.genericName,
+        category: p.category,
+        supplier_id: p.supplierId || null,
+        purchase_price: p.purchasePrice,
+        selling_price: p.sellingPrice,
+        quantity: p.quantity,
+        reorder_level: p.reorderLevel,
+        batch_number: p.batchNumber,
+        expiry_date: p.expiryDate || null,
+        description: p.description,
+      };
+      if (p.id) {
+        await supabase.from("products").update(payload).eq("id", p.id);
+      } else {
+        await supabase.from("products").insert(payload);
+      }
+      await log("PRODUCT_UPSERT", p.name);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
+  const deleteProduct = useCallback(
+    async (id: string) => {
+      await supabase.from("products").delete().eq("id", id);
+      await log("PRODUCT_DELETE", id);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
+  const upsertSupplier = useCallback(
+    async (s: Supplier) => {
+      const payload = {
+        name: s.name,
+        contact_person: s.contactPerson,
+        phone: s.phone,
+        email: s.email,
+        address: s.address,
+      };
+      if (s.id) await supabase.from("suppliers").update(payload).eq("id", s.id);
+      else await supabase.from("suppliers").insert(payload);
+      await log("SUPPLIER_UPSERT", s.name);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
+  const deleteSupplier = useCallback(
+    async (id: string) => {
+      await supabase.from("suppliers").delete().eq("id", id);
+      await log("SUPPLIER_DELETE", id);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
+  const upsertUser = useCallback(
+    async (u: User) => {
+      if (!u.id) return; // creating new users happens via Auth signup
+      await supabase
+        .from("profiles")
+        .update({ full_name: u.fullName, phone: u.phone, status: u.status })
+        .eq("id", u.id);
+      // Update role: delete existing & insert new
+      await supabase.from("user_roles").delete().eq("user_id", u.id);
+      await supabase.from("user_roles").insert({ user_id: u.id, role: u.role });
+      await log("USER_UPSERT", u.email);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
+  const toggleUserStatus = useCallback(
+    async (id: string) => {
+      const u = data.users.find((x) => x.id === id);
+      if (!u) return;
+      const next = u.status === "active" ? "disabled" : "active";
+      await supabase.from("profiles").update({ status: next }).eq("id", id);
+      await log("USER_STATUS_TOGGLE", `${u.email} → ${next}`);
+      await refresh();
+    },
+    [data.users, log, refresh],
+  );
+
+  const addMovement = useCallback(
+    async (m: Omit<InventoryMovement, "id" | "date" | "userId">) => {
+      if (!sessionUserId) return;
+      const product = data.products.find((p) => p.id === m.productId);
+      if (!product) return;
+      let newQty = product.quantity;
+      if (m.type === "in") newQty = product.quantity + m.quantity;
+      else if (m.type === "out") newQty = Math.max(0, product.quantity - m.quantity);
+      else if (m.type === "adjustment") newQty = m.newQty ?? product.quantity;
+
+      await supabase.from("inventory_movements").insert({
+        product_id: m.productId,
+        type: m.type,
+        quantity: m.quantity,
+        previous_qty: product.quantity,
+        new_qty: newQty,
+        reason: m.reason ?? "",
+        supplier_id: m.supplierId ?? null,
+        cost: m.cost ?? null,
+        user_id: sessionUserId,
+      });
+      await supabase.from("products").update({ quantity: newQty }).eq("id", m.productId);
+      await log(`STOCK_${m.type.toUpperCase()}`, `${product.name} (${m.quantity})`);
+      await refresh();
+    },
+    [data.products, log, refresh, sessionUserId],
+  );
+
+  const addSale = useCallback(
+    async (s: Omit<Sale, "id" | "saleNumber" | "date" | "cashierId">) => {
+      if (!sessionUserId) return null;
+      const saleNumber = `INV-${Date.now().toString().slice(-7)}`;
+      const { data: created, error } = await supabase
+        .from("sales")
+        .insert({
+          sale_number: saleNumber,
+          cashier_id: sessionUserId,
+          subtotal: s.subtotal,
+          discount: s.discount,
+          tax: s.tax,
+          total: s.total,
+          payment_method: s.paymentMethod,
+        })
+        .select()
+        .single();
+      if (error || !created) return null;
+
+      const items = s.items.map((i) => ({
+        sale_id: created.id,
+        product_id: i.productId,
+        name: i.name,
+        quantity: i.quantity,
+        unit_price: i.unitPrice,
+        line_total: i.lineTotal,
+      }));
+      await supabase.from("sale_items").insert(items);
+
+      // Decrement stock
+      for (const item of s.items) {
+        const p = data.products.find((x) => x.id === item.productId);
+        if (!p) continue;
+        await supabase
+          .from("products")
+          .update({ quantity: Math.max(0, p.quantity - item.quantity) })
+          .eq("id", p.id);
+      }
+      await log("SALE_CREATE", saleNumber);
+      await refresh();
+
+      return {
+        ...s,
+        id: created.id,
+        saleNumber,
+        date: created.created_at,
+        cashierId: sessionUserId,
+      } as Sale;
+    },
+    [data.products, log, refresh, sessionUserId],
+  );
 
   const value = useMemo<StoreContextValue>(
     () => ({
       ...data,
       currentUser,
-      login,
+      loading,
+      refresh,
       logout,
-      resetData: () => setData(initial()),
-      upsertProduct: (p) => {
-        setData((d) => {
-          const exists = d.products.some((x) => x.id === p.id);
-          return {
-            ...d,
-            products: exists
-              ? d.products.map((x) => (x.id === p.id ? p : x))
-              : [{ ...p, id: p.id || uid() }, ...d.products],
-          };
-        });
-        log(currentUser ? "PRODUCT_UPSERT" : "PRODUCT_UPSERT", p.name);
-      },
-      deleteProduct: (id) => {
-        setData((d) => ({ ...d, products: d.products.filter((x) => x.id !== id) }));
-        log("PRODUCT_DELETE", id);
-      },
-      upsertSupplier: (s) => {
-        setData((d) => {
-          const exists = d.suppliers.some((x) => x.id === s.id);
-          return {
-            ...d,
-            suppliers: exists
-              ? d.suppliers.map((x) => (x.id === s.id ? s : x))
-              : [{ ...s, id: s.id || uid() }, ...d.suppliers],
-          };
-        });
-        log("SUPPLIER_UPSERT", s.name);
-      },
-      deleteSupplier: (id) => {
-        setData((d) => ({ ...d, suppliers: d.suppliers.filter((x) => x.id !== id) }));
-        log("SUPPLIER_DELETE", id);
-      },
-      upsertUser: (u) => {
-        setData((d) => {
-          const exists = d.users.some((x) => x.id === u.id);
-          return {
-            ...d,
-            users: exists
-              ? d.users.map((x) => (x.id === u.id ? u : x))
-              : [{ ...u, id: u.id || uid() }, ...d.users],
-          };
-        });
-        log("USER_UPSERT", u.email);
-      },
-      toggleUserStatus: (id) => {
-        setData((d) => ({
-          ...d,
-          users: d.users.map((x) =>
-            x.id === id ? { ...x, status: x.status === "active" ? "disabled" : "active" } : x,
-          ),
-        }));
-        log("USER_STATUS_TOGGLE", id);
-      },
-      addMovement: (m) => {
-        const movement: InventoryMovement = {
-          ...m,
-          id: uid(),
-          date: new Date().toISOString(),
-          userId: currentUser?.id ?? "system",
-        };
-        setData((d) => {
-          const products = d.products.map((p) => {
-            if (p.id !== m.productId) return p;
-            let newQty = p.quantity;
-            if (m.type === "in") newQty = p.quantity + m.quantity;
-            else if (m.type === "out") newQty = Math.max(0, p.quantity - m.quantity);
-            else if (m.type === "adjustment") newQty = m.newQty ?? p.quantity;
-            return { ...p, quantity: newQty, updatedAt: new Date().toISOString() };
-          });
-          return { ...d, products, movements: [movement, ...d.movements] };
-        });
-        log(
-          `STOCK_${m.type.toUpperCase()}`,
-          `Product ${m.productId} qty ${m.quantity}`,
-        );
-      },
-      addSale: (s) => {
-        const sale: Sale = {
-          ...s,
-          id: uid(),
-          saleNumber: `INV-${1000 + Math.floor(Math.random() * 9000)}`,
-          date: new Date().toISOString(),
-          cashierId: currentUser?.id ?? "u3",
-        };
-        setData((d) => {
-          const products = d.products.map((p) => {
-            const item = s.items.find((i) => i.productId === p.id);
-            if (!item) return p;
-            return { ...p, quantity: Math.max(0, p.quantity - item.quantity) };
-          });
-          return { ...d, products, sales: [sale, ...d.sales] };
-        });
-        log("SALE_CREATE", sale.saleNumber);
-        return sale;
-      },
+      upsertProduct,
+      deleteProduct,
+      upsertSupplier,
+      deleteSupplier,
+      upsertUser,
+      toggleUserStatus,
+      addMovement,
+      addSale,
       log,
     }),
-    [data, currentUser, login, logout, log],
+    [
+      data,
+      currentUser,
+      loading,
+      refresh,
+      logout,
+      upsertProduct,
+      deleteProduct,
+      upsertSupplier,
+      deleteSupplier,
+      upsertUser,
+      toggleUserStatus,
+      addMovement,
+      addSale,
+      log,
+    ],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

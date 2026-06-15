@@ -135,8 +135,8 @@ export function Topbar({ title }: { title: string }) {
             Settings
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               navigate({ to: "/auth" });
             }}
             className="text-destructive"
