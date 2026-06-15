@@ -35,7 +35,7 @@ function POSPage() {
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(5);
   const [pay, setPay] = useState<PaymentMethod>("cash");
-  const [receipt, setReceipt] = useState<null | ReturnType<typeof addSale>>(null);
+  const [receipt, setReceipt] = useState<import("@/lib/types").Sale | null>(null);
 
   const filtered = useMemo(
     () =>
