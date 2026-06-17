@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { KeyRound, Pencil, Plus, Power } from "lucide-react";
+import { Pencil, Power, ShieldCheck } from "lucide-react";
 import { useStore } from "@/lib/store";
 import type { Role, User } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -31,48 +31,42 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { shortDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/users")({
   component: UsersPage,
 });
 
-const empty = (): User => ({
-  id: "",
-  fullName: "",
-  email: "",
-  phone: "",
-  role: "cashier",
-  status: "active",
-  password: "demo",
-  createdAt: new Date().toISOString(),
-});
-
 const roles: Role[] = ["owner", "manager", "cashier", "pharmacist"];
 
 function UsersPage() {
-  const { users, upsertUser, toggleUserStatus } = useStore();
+  const { users, upsertUser, toggleUserStatus, currentUser } = useStore();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<User>(empty());
+  const [draft, setDraft] = useState<User | null>(null);
 
-  const save = () => {
-    if (!draft.fullName || !draft.email) return toast.error("Name and email required");
-    upsertUser(draft);
+  const canManage = currentUser?.role === "owner" || currentUser?.role === "manager";
+
+  const save = async () => {
+    if (!draft) return;
+    if (!draft.fullName) return toast.error("Full name required");
+    await upsertUser(draft);
     toast.success("User saved");
     setOpen(false);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button
-          onClick={() => {
-            setDraft(empty());
-            setOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-1" /> Create User
-        </Button>
-      </div>
+      <Card className="p-4 flex items-start gap-3 bg-secondary/40">
+        <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+        <div className="text-sm">
+          <div className="font-medium">Staff onboarding</div>
+          <p className="text-muted-foreground">
+            New staff must create their own account from the sign-in page using
+            their email and password. After they sign up, an Owner or Manager
+            can assign their role and activate them here.
+          </p>
+        </div>
+      </Card>
 
       <Card>
         <Table>
@@ -82,6 +76,7 @@ function UsersPage() {
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Joined</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -91,8 +86,13 @@ function UsersPage() {
               <TableRow key={u.id}>
                 <TableCell className="font-medium">{u.fullName}</TableCell>
                 <TableCell>{u.email}</TableCell>
-                <TableCell>{u.phone}</TableCell>
-                <TableCell><Badge variant="outline" className="capitalize">{u.role}</Badge></TableCell>
+                <TableCell>{u.phone || "—"}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize">{u.role}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {shortDate(u.createdAt)}
+                </TableCell>
                 <TableCell>
                   {u.status === "active" ? (
                     <Badge className="bg-success text-success-foreground">Active</Badge>
@@ -101,24 +101,20 @@ function UsersPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => { setDraft(u); setOpen(true); }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={!canManage}
+                    onClick={() => { setDraft({ ...u }); setOpen(true); }}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      upsertUser({ ...u, password: "demo" });
-                      toast.success(`Password reset to "demo" for ${u.fullName}`);
-                    }}
-                  >
-                    <KeyRound className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      toggleUserStatus(u.id);
+                    disabled={!canManage || u.id === currentUser?.id}
+                    onClick={async () => {
+                      await toggleUserStatus(u.id);
                       toast.success("Status updated");
                     }}
                   >
@@ -127,6 +123,13 @@ function UsersPage() {
                 </TableCell>
               </TableRow>
             ))}
+            {users.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  No users yet.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -134,32 +137,52 @@ function UsersPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{draft.id ? "Edit User" : "Create User"}</DialogTitle>
+            <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <Row label="Full Name">
-              <Input value={draft.fullName} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} />
-            </Row>
-            <Row label="Email">
-              <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
-            </Row>
-            <Row label="Phone">
-              <Input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
-            </Row>
-            <Row label="Role">
-              <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v as Role })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Row>
-            <Row label="Password">
-              <Input type="text" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} />
-            </Row>
-          </div>
+          {draft && (
+            <div className="space-y-3">
+              <Row label="Full Name">
+                <Input
+                  value={draft.fullName}
+                  onChange={(e) => setDraft({ ...draft, fullName: e.target.value })}
+                />
+              </Row>
+              <Row label="Email">
+                <Input value={draft.email} disabled />
+              </Row>
+              <Row label="Phone">
+                <Input
+                  value={draft.phone}
+                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+                />
+              </Row>
+              <Row label="Role">
+                <Select
+                  value={draft.role}
+                  onValueChange={(v) => setDraft({ ...draft, role: v as Role })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {roles.map((r) => (
+                      <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Row label="Status">
+                <Select
+                  value={draft.status}
+                  onValueChange={(v) => setDraft({ ...draft, status: v as User["status"] })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save}>Save</Button>

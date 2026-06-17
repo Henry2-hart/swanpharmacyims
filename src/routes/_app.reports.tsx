@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { currency, daysUntil, shortDate } from "@/lib/format";
+import { downloadCSV } from "@/lib/csv";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -155,21 +156,21 @@ function ReportsPage() {
   );
 }
 
-function Actions() {
+function Actions({ filename, headers, rows }: { filename?: string; headers?: string[]; rows?: (string | number)[][] }) {
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => window.print()}>
         <Printer className="h-4 w-4 mr-1" /> Print
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          window.print();
-        }}
-      >
-        <Download className="h-4 w-4 mr-1" /> Export PDF
-      </Button>
+      {headers && rows && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => downloadCSV(filename ?? "report.csv", headers, rows)}
+        >
+          <Download className="h-4 w-4 mr-1" /> Export CSV
+        </Button>
+      )}
     </>
   );
 }
@@ -192,11 +193,14 @@ function ReportTable({
   headers: string[];
   rows: (string | number)[][];
 }) {
+  const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`;
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>{title}</CardTitle>
-        <Actions />
+        <div className="flex gap-2">
+          <Actions filename={filename} headers={headers} rows={rows} />
+        </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full text-sm">

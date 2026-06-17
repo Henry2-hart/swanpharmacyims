@@ -125,7 +125,19 @@ function POSPage() {
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products to add…" className="pl-8" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && filtered.length > 0) {
+                add(filtered[0].id);
+                setQ("");
+              }
+            }}
+            placeholder="Scan barcode or search products… (Enter to add first match)"
+            className="pl-8"
+            autoFocus
+          />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {filtered.map((p) => (
