@@ -1,28 +1,113 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Cloud, Database, RefreshCw } from "lucide-react";
+import { Cloud, RefreshCw, Save } from "lucide-react";
+import type { PharmacySettings } from "@/lib/types";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { currentUser, refresh } = useStore();
+  const { currentUser, refresh, settings, updateSettings } = useStore();
+  const [draft, setDraft] = useState<PharmacySettings>(settings);
+  const [busy, setBusy] = useState(false);
+  const canEdit = currentUser?.role === "owner" || currentUser?.role === "manager";
+
+  useEffect(() => setDraft(settings), [settings]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await updateSettings(draft);
+      toast.success("Settings saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save settings");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <Card>
+      <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle>Pharmacy Profile</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm space-y-2">
-          <Row label="Business name" value="MediStock Pharmacy" />
-          <Row label="Currency" value="TZS" />
-          <Row label="Tax rate" value="5%" />
-          <Row label="Signed in as" value={`${currentUser?.fullName} (${currentUser?.role})`} />
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <Field label="Business name">
+            <Input
+              value={draft.businessName}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, businessName: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone">
+            <Input
+              value={draft.phone}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+            />
+          </Field>
+          <Field label="Email">
+            <Input
+              type="email"
+              value={draft.email}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Address">
+            <Input
+              value={draft.address}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+            />
+          </Field>
+          <Field label="Default tax rate (%)">
+            <Input
+              type="number"
+              value={draft.taxRate}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, taxRate: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Low-stock threshold (units)">
+            <Input
+              type="number"
+              value={draft.lowStockThreshold}
+              disabled={!canEdit}
+              onChange={(e) => setDraft({ ...draft, lowStockThreshold: Number(e.target.value) })}
+            />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="Receipt footer">
+              <Textarea
+                value={draft.receiptFooter}
+                disabled={!canEdit}
+                rows={2}
+                onChange={(e) => setDraft({ ...draft, receiptFooter: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div className="md:col-span-2 flex items-center justify-between border-t pt-4">
+            <div className="text-sm text-muted-foreground">
+              Signed in as <span className="font-medium text-foreground">{currentUser?.fullName}</span>{" "}
+              <Badge variant="outline" className="ml-1 capitalize">{currentUser?.role}</Badge>
+              <span className="ml-2">· Currency: TZS</span>
+            </div>
+            <Button onClick={save} disabled={!canEdit || busy}>
+              <Save className="h-4 w-4 mr-2" />
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -38,36 +123,40 @@ function SettingsPage() {
             <Badge className="bg-success text-success-foreground">Connected</Badge>
           </div>
           <p className="text-muted-foreground text-xs">
-            Data is stored securely in Lovable Cloud and synced across devices in real time.
+            Data is stored securely in the cloud and synced across devices in real time.
           </p>
-          <Button variant="outline" size="sm" onClick={async () => { await refresh(); toast.success("Refreshed from cloud"); }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await refresh();
+              toast.success("Refreshed from cloud");
+            }}
+          >
             <RefreshCw className="h-3 w-3 mr-1" /> Refresh now
           </Button>
         </CardContent>
       </Card>
 
-      <Card className="md:col-span-2">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-4 w-4" /> Data
-          </CardTitle>
+          <CardTitle>Security</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            All pharmacy data is stored in your Lovable Cloud backend with role-based access control.
-            Use the Products, Suppliers, and Users pages to manage records.
-          </p>
+        <CardContent className="text-sm space-y-2 text-muted-foreground">
+          <p>• Sessions are not persisted between browser launches — staff sign in each time the app is opened.</p>
+          <p>• All actions are recorded in the Audit Logs.</p>
+          <p>• Roles control which modules each user can access.</p>
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
     </div>
   );
 }
