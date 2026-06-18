@@ -271,6 +271,11 @@ function POSPage() {
                 </div>
                 <Row label="Payment" value={receipt.paymentMethod.replace("_", " ")} />
               </div>
+              {settings.receiptFooter && (
+                <div className="text-center text-xs text-muted-foreground pt-2 border-t border-dashed">
+                  {settings.receiptFooter}
+                </div>
+              )}
               <div className="pt-3 flex gap-2">
                 <Button className="flex-1" variant="outline" onClick={() => window.print()}>
                   Print
