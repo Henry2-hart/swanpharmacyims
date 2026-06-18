@@ -95,6 +95,45 @@ export type Database = {
           },
         ]
       }
+      pharmacy_settings: {
+        Row: {
+          address: string
+          business_name: string
+          created_at: string
+          email: string
+          id: boolean
+          low_stock_threshold: number
+          phone: string
+          receipt_footer: string
+          tax_rate: number
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          business_name?: string
+          created_at?: string
+          email?: string
+          id?: boolean
+          low_stock_threshold?: number
+          phone?: string
+          receipt_footer?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          business_name?: string
+          created_at?: string
+          email?: string
+          id?: boolean
+          low_stock_threshold?: number
+          phone?: string
+          receipt_footer?: string
+          tax_rate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           batch_number: string
