@@ -29,13 +29,16 @@ export const Route = createFileRoute("/_app/pos")({
 });
 
 function POSPage() {
-  const { products, addSale, currentUser } = useStore();
+  const { products, addSale, currentUser, settings } = useStore();
   const [q, setQ] = useState("");
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [discount, setDiscount] = useState(0);
-  const [taxRate, setTaxRate] = useState(5);
+  const [taxRate, setTaxRate] = useState(settings.taxRate);
   const [pay, setPay] = useState<PaymentMethod>("cash");
   const [receipt, setReceipt] = useState<import("@/lib/types").Sale | null>(null);
+
+  // sync default tax when settings load
+  useMemo(() => setTaxRate(settings.taxRate), [settings.taxRate]);
 
   const filtered = useMemo(
     () =>
@@ -244,8 +247,10 @@ function POSPage() {
           {receipt && (
             <div className="font-mono text-sm space-y-2">
               <div className="text-center">
-                <div className="font-semibold">MediStock Pharmacy</div>
-                <div className="text-xs text-muted-foreground">{dateTime(receipt.date)}</div>
+                <div className="font-semibold">{settings.businessName}</div>
+                {settings.address && <div className="text-xs text-muted-foreground">{settings.address}</div>}
+                {settings.phone && <div className="text-xs text-muted-foreground">{settings.phone}</div>}
+                <div className="text-xs text-muted-foreground mt-1">{dateTime(receipt.date)}</div>
                 <div className="text-xs">{receipt.saleNumber}</div>
               </div>
               <div className="border-t border-dashed pt-2 space-y-1">
@@ -266,6 +271,11 @@ function POSPage() {
                 </div>
                 <Row label="Payment" value={receipt.paymentMethod.replace("_", " ")} />
               </div>
+              {settings.receiptFooter && (
+                <div className="text-center text-xs text-muted-foreground pt-2 border-t border-dashed">
+                  {settings.receiptFooter}
+                </div>
+              )}
               <div className="pt-3 flex gap-2">
                 <Button className="flex-1" variant="outline" onClick={() => window.print()}>
                   Print

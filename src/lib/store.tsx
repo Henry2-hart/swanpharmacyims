@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type {
   AuditLog,
   InventoryMovement,
+  PharmacySettings,
   Product,
   Role,
   Sale,
@@ -25,6 +26,7 @@ interface StoreData {
   movements: InventoryMovement[];
   sales: Sale[];
   audit: AuditLog[];
+  settings: PharmacySettings;
 }
 
 interface StoreContextValue extends StoreData {
@@ -47,9 +49,21 @@ interface StoreContextValue extends StoreData {
   addSale: (s: Omit<Sale, "id" | "saleNumber" | "date" | "cashierId">) => Promise<Sale | null>;
   // audit
   log: (action: string, detail?: string) => Promise<void>;
+  // settings
+  updateSettings: (s: PharmacySettings) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
+
+const defaultSettings: PharmacySettings = {
+  businessName: "MediStock Pharmacy",
+  address: "",
+  phone: "",
+  email: "",
+  taxRate: 5,
+  receiptFooter: "Thank you for your purchase!",
+  lowStockThreshold: 10,
+};
 
 const emptyData: StoreData = {
   users: [],
@@ -58,6 +72,7 @@ const emptyData: StoreData = {
   movements: [],
   sales: [],
   audit: [],
+  settings: defaultSettings,
 };
 
 // ---- mappers ----
@@ -189,6 +204,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       { data: movements },
       { data: sales },
       { data: audit },
+      { data: settingsRow },
     ] = await Promise.all([
       supabase.from("suppliers").select("*").order("created_at", { ascending: false }),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
@@ -199,7 +215,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .order("created_at", { ascending: false })
         .limit(500),
       supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("pharmacy_settings").select("*").maybeSingle(),
     ]);
+
+    const settings: PharmacySettings = settingsRow
+      ? {
+          businessName: settingsRow.business_name ?? defaultSettings.businessName,
+          address: settingsRow.address ?? "",
+          phone: settingsRow.phone ?? "",
+          email: settingsRow.email ?? "",
+          taxRate: Number(settingsRow.tax_rate ?? defaultSettings.taxRate),
+          receiptFooter: settingsRow.receipt_footer ?? defaultSettings.receiptFooter,
+          lowStockThreshold: Number(settingsRow.low_stock_threshold ?? defaultSettings.lowStockThreshold),
+        }
+      : defaultSettings;
 
     setData({
       users,
@@ -208,6 +237,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       movements: (movements ?? []).map(mapMovement),
       sales: (sales ?? []).map(mapSale),
       audit: (audit ?? []).map(mapAudit),
+      settings,
     });
     setLoading(false);
   }, []);
@@ -409,6 +439,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [data.products, log, refresh, sessionUserId],
   );
 
+  const updateSettings = useCallback(
+    async (s: PharmacySettings) => {
+      const payload = {
+        id: true,
+        business_name: s.businessName,
+        address: s.address,
+        phone: s.phone,
+        email: s.email,
+        tax_rate: s.taxRate,
+        receipt_footer: s.receiptFooter,
+        low_stock_threshold: s.lowStockThreshold,
+      };
+      const { error } = await supabase
+        .from("pharmacy_settings")
+        .upsert(payload, { onConflict: "id" });
+      if (error) throw error;
+      await log("SETTINGS_UPDATE", s.businessName);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
   const value = useMemo<StoreContextValue>(
     () => ({
       ...data,
@@ -425,6 +477,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addMovement,
       addSale,
       log,
+      updateSettings,
     }),
     [
       data,
@@ -441,6 +494,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addMovement,
       addSale,
       log,
+      updateSettings,
     ],
   );
 
