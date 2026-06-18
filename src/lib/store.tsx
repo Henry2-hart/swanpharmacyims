@@ -439,6 +439,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [data.products, log, refresh, sessionUserId],
   );
 
+  const updateSettings = useCallback(
+    async (s: PharmacySettings) => {
+      const payload = {
+        id: true,
+        business_name: s.businessName,
+        address: s.address,
+        phone: s.phone,
+        email: s.email,
+        tax_rate: s.taxRate,
+        receipt_footer: s.receiptFooter,
+        low_stock_threshold: s.lowStockThreshold,
+      };
+      const { error } = await supabase
+        .from("pharmacy_settings")
+        .upsert(payload, { onConflict: "id" });
+      if (error) throw error;
+      await log("SETTINGS_UPDATE", s.businessName);
+      await refresh();
+    },
+    [log, refresh],
+  );
+
   const value = useMemo<StoreContextValue>(
     () => ({
       ...data,
@@ -455,6 +477,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addMovement,
       addSale,
       log,
+      updateSettings,
     }),
     [
       data,
@@ -471,6 +494,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addMovement,
       addSale,
       log,
+      updateSettings,
     ],
   );
 
