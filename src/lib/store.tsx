@@ -299,15 +299,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const upsertUser = useCallback(
     async (u: User) => {
-      if (!u.id) return; // creating new users happens via Auth signup
-      await supabase
+      if (!u.id) return;
+      const { error: profErr } = await supabase
         .from("profiles")
         .update({ full_name: u.fullName, phone: u.phone, status: u.status })
         .eq("id", u.id);
-      // Update role: delete existing & insert new
-      await supabase.from("user_roles").delete().eq("user_id", u.id);
-      await supabase.from("user_roles").insert({ user_id: u.id, role: u.role });
-      await log("USER_UPSERT", u.email);
+      if (profErr) throw profErr;
+      const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", u.id);
+      if (delErr) throw delErr;
+      const { error: insErr } = await supabase
+        .from("user_roles")
+        .insert({ user_id: u.id, role: u.role });
+      if (insErr) throw insErr;
+      await log("USER_UPSERT", `${u.email} → ${u.role}`);
       await refresh();
     },
     [log, refresh],
