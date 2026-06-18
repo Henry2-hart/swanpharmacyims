@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type {
   AuditLog,
   InventoryMovement,
+  PharmacySettings,
   Product,
   Role,
   Sale,
@@ -25,6 +26,7 @@ interface StoreData {
   movements: InventoryMovement[];
   sales: Sale[];
   audit: AuditLog[];
+  settings: PharmacySettings;
 }
 
 interface StoreContextValue extends StoreData {

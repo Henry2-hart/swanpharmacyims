@@ -81,3 +81,13 @@ export interface AuditLog {
   detail?: string;
   timestamp: string;
 }
+
+export interface PharmacySettings {
+  businessName: string;
+  address: string;
+  phone: string;
+  email: string;
+  taxRate: number;
+  receiptFooter: string;
+  lowStockThreshold: number;
+}
