@@ -49,9 +49,13 @@ function UsersPage() {
   const save = async () => {
     if (!draft) return;
     if (!draft.fullName) return toast.error("Full name required");
-    await upsertUser(draft);
-    toast.success("User saved");
-    setOpen(false);
+    try {
+      await upsertUser(draft);
+      toast.success("User saved");
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update user");
+    }
   };
 
   return (
