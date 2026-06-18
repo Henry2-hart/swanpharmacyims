@@ -1,7 +1,7 @@
 export const currency = (n: number) =>
-  new Intl.NumberFormat("en-US", {
+  new Intl.NumberFormat("en-TZ", {
     style: "currency",
-    currency: "RWF",
+    currency: "TZS",
     maximumFractionDigits: 0,
   }).format(n);
 

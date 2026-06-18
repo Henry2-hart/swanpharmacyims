@@ -34,12 +34,17 @@ function AuthPage() {
     });
   }, [navigate]);
 
+  const markSessionActive = () => {
+    sessionStorage.setItem("medistock_session_active", "1");
+  };
+
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message);
+    markSessionActive();
     toast.success("Welcome back");
     navigate({ to: "/" });
   };
@@ -58,12 +63,12 @@ function AuthPage() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Account created. Signing you in…");
-    // auto-confirm is on, so we can sign in immediately
     const { error: signinErr } = await supabase.auth.signInWithPassword({
       email: signupEmail,
       password: signupPassword,
     });
     if (signinErr) return toast.error(signinErr.message);
+    markSessionActive();
     navigate({ to: "/" });
   };
 

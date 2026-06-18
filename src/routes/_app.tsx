@@ -36,12 +36,25 @@ function AppLayout() {
     "MediStock";
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      // Require re-login when the browser session marker is missing
+      // (sessionStorage clears on tab/window close but survives refresh).
+      const marker = sessionStorage.getItem("medistock_session_active");
+      if (data.session && !marker) {
+        await supabase.auth.signOut();
+        navigate({ to: "/auth" });
+        setCheckedAuth(true);
+        return;
+      }
       if (!data.session) navigate({ to: "/auth" });
       setCheckedAuth(true);
-    });
+    })();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate({ to: "/auth" });
+      if (!session) {
+        sessionStorage.removeItem("medistock_session_active");
+        navigate({ to: "/auth" });
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);

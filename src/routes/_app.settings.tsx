@@ -20,7 +20,7 @@ function SettingsPage() {
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           <Row label="Business name" value="MediStock Pharmacy" />
-          <Row label="Currency" value="RWF" />
+          <Row label="Currency" value="TZS" />
           <Row label="Tax rate" value="5%" />
           <Row label="Signed in as" value={`${currentUser?.fullName} (${currentUser?.role})`} />
         </CardContent>
