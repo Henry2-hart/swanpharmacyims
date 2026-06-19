@@ -83,14 +83,30 @@ function ProductsPage() {
       toast.error("Product name is required");
       return;
     }
+    const dup = products.find(
+      (p) =>
+        p.id !== draft.id &&
+        p.name.trim().toLowerCase() === draft.name.trim().toLowerCase(),
+    );
+    if (dup) {
+      toast.error(`A product named "${dup.name}" already exists. Use Stock In to add more quantity.`);
+      return;
+    }
+    if (!draft.category?.trim()) {
+      toast.error("Category is required");
+      return;
+    }
     upsertProduct({
       ...draft,
+      name: draft.name.trim(),
+      category: draft.category.trim(),
       expiryDate: new Date(draft.expiryDate).toISOString(),
       updatedAt: new Date().toISOString(),
     });
     toast.success("Product saved");
     setOpen(false);
   };
+
 
   return (
     <div className="space-y-4">
