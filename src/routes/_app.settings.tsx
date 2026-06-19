@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Cloud, RefreshCw, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import type { PharmacySettings } from "@/lib/types";
 
 export const Route = createFileRoute("/_app/settings")({
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 function SettingsPage() {
-  const { currentUser, refresh, settings, updateSettings } = useStore();
+  const { currentUser, settings, updateSettings } = useStore();
   const [draft, setDraft] = useState<PharmacySettings>(settings);
   const [busy, setBusy] = useState(false);
   const canEdit = currentUser?.role === "owner" || currentUser?.role === "manager";
@@ -36,8 +36,8 @@ function SettingsPage() {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card className="md:col-span-2">
+    <div className="grid gap-4">
+      <Card>
         <CardHeader>
           <CardTitle>Pharmacy Profile</CardTitle>
         </CardHeader>
@@ -108,44 +108,6 @@ function SettingsPage() {
               {busy ? "Saving…" : "Save changes"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cloud className="h-4 w-4" /> Cloud Synchronization
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span>Status</span>
-            <Badge className="bg-success text-success-foreground">Connected</Badge>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            Data is stored securely in the cloud and synced across devices in real time.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              await refresh();
-              toast.success("Refreshed from cloud");
-            }}
-          >
-            <RefreshCw className="h-3 w-3 mr-1" /> Refresh now
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Security</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-2 text-muted-foreground">
-          <p>• Sessions are not persisted between browser launches — staff sign in each time the app is opened.</p>
-          <p>• All actions are recorded in the Audit Logs.</p>
-          <p>• Roles control which modules each user can access.</p>
         </CardContent>
       </Card>
     </div>
