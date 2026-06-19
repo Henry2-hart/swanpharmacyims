@@ -13,10 +13,16 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const LOCKOUT_KEY = "medistock_login_lockout";
+const ATTEMPTS_KEY = "medistock_login_attempts";
+const MAX_ATTEMPTS = 3;
+const LOCKOUT_SECONDS = 120;
+
 function AuthPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [busy, setBusy] = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(0);
 
   // sign in
   const [email, setEmail] = useState("");
@@ -34,16 +40,52 @@ function AuthPage() {
     });
   }, [navigate]);
 
+  // Tick lockout timer
+  useEffect(() => {
+    const tick = () => {
+      const until = Number(localStorage.getItem(LOCKOUT_KEY) || 0);
+      const rem = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      setLockRemaining(rem);
+      if (rem === 0 && until) {
+        localStorage.removeItem(LOCKOUT_KEY);
+        localStorage.removeItem(ATTEMPTS_KEY);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const markSessionActive = () => {
     sessionStorage.setItem("medistock_session_active", "1");
   };
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    const until = Number(localStorage.getItem(LOCKOUT_KEY) || 0);
+    if (until > Date.now()) {
+      toast.error(`Too many attempts. Try again in ${Math.ceil((until - Date.now()) / 1000)}s.`);
+      return;
+    }
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      const attempts = Number(localStorage.getItem(ATTEMPTS_KEY) || 0) + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        const lockUntil = Date.now() + LOCKOUT_SECONDS * 1000;
+        localStorage.setItem(LOCKOUT_KEY, String(lockUntil));
+        localStorage.setItem(ATTEMPTS_KEY, "0");
+        setLockRemaining(LOCKOUT_SECONDS);
+        toast.error(`Locked for ${LOCKOUT_SECONDS}s after ${MAX_ATTEMPTS} failed attempts.`);
+      } else {
+        localStorage.setItem(ATTEMPTS_KEY, String(attempts));
+        toast.error(`${error.message} (${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? "" : "s"} left)`);
+      }
+      return;
+    }
+    localStorage.removeItem(ATTEMPTS_KEY);
+    localStorage.removeItem(LOCKOUT_KEY);
     markSessionActive();
     toast.success("Welcome back");
     navigate({ to: "/" });
