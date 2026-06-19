@@ -45,7 +45,7 @@ export type Database = {
           id: string
           new_qty: number | null
           previous_qty: number | null
-          product_id: string
+          product_id: string | null
           quantity: number
           reason: string
           supplier_id: string | null
@@ -58,7 +58,7 @@ export type Database = {
           id?: string
           new_qty?: number | null
           previous_qty?: number | null
-          product_id: string
+          product_id?: string | null
           quantity: number
           reason?: string
           supplier_id?: string | null
@@ -71,7 +71,7 @@ export type Database = {
           id?: string
           new_qty?: number | null
           previous_qty?: number | null
-          product_id?: string
+          product_id?: string | null
           quantity?: number
           reason?: string
           supplier_id?: string | null
@@ -228,7 +228,7 @@ export type Database = {
           id: string
           line_total: number
           name: string
-          product_id: string
+          product_id: string | null
           quantity: number
           sale_id: string
           unit_price: number
@@ -237,7 +237,7 @@ export type Database = {
           id?: string
           line_total: number
           name: string
-          product_id: string
+          product_id?: string | null
           quantity: number
           sale_id: string
           unit_price: number
@@ -246,7 +246,7 @@ export type Database = {
           id?: string
           line_total?: number
           name?: string
-          product_id?: string
+          product_id?: string | null
           quantity?: number
           sale_id?: string
           unit_price?: number
