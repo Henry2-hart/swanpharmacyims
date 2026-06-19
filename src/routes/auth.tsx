@@ -165,14 +165,19 @@ function AuthPage() {
               <form onSubmit={signIn} className="mt-6 space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={lockRemaining > 0} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} disabled={lockRemaining > 0} />
                 </div>
-                <Button type="submit" className="w-full" disabled={busy}>
-                  {busy ? "Signing in…" : "Sign in"}
+                {lockRemaining > 0 && (
+                  <p className="text-sm text-destructive">
+                    Locked due to failed attempts. Try again in {lockRemaining}s.
+                  </p>
+                )}
+                <Button type="submit" className="w-full" disabled={busy || lockRemaining > 0}>
+                  {lockRemaining > 0 ? `Locked (${lockRemaining}s)` : busy ? "Signing in…" : "Sign in"}
                 </Button>
               </form>
             </TabsContent>
