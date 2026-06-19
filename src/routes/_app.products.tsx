@@ -240,19 +240,21 @@ function ProductsPage() {
               />
             </Field>
             <Field label="Category">
-              <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
+              <Input
+                list="product-categories"
+                value={draft.category}
+                placeholder="Select or type a category"
+                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+              />
+              <datalist id="product-categories">
+                {Array.from(new Set([...categories, ...products.map((p) => p.category)]))
+                  .filter(Boolean)
+                  .map((c) => (
+                    <option key={c} value={c} />
                   ))}
-                </SelectContent>
-              </Select>
+              </datalist>
             </Field>
+
             <Field label="Supplier">
               <Select value={draft.supplierId} onValueChange={(v) => setDraft({ ...draft, supplierId: v })}>
                 <SelectTrigger>
