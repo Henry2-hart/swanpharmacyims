@@ -134,52 +134,124 @@ export type Database = {
         }
         Relationships: []
       }
-      products: {
+      product_batches: {
         Row: {
           batch_number: string
-          category: string
           created_at: string
-          description: string
           expiry_date: string | null
-          generic_name: string
           id: string
-          name: string
+          initial_quantity: number
+          manufacture_date: string | null
+          notes: string
+          product_id: string
           purchase_price: number
-          quantity: number
-          reorder_level: number
           selling_price: number
           supplier_id: string | null
           updated_at: string
         }
         Insert: {
           batch_number?: string
-          category?: string
           created_at?: string
-          description?: string
           expiry_date?: string | null
-          generic_name?: string
           id?: string
-          name: string
+          initial_quantity?: number
+          manufacture_date?: string | null
+          notes?: string
+          product_id: string
           purchase_price?: number
-          quantity?: number
-          reorder_level?: number
           selling_price?: number
           supplier_id?: string | null
           updated_at?: string
         }
         Update: {
           batch_number?: string
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          initial_quantity?: number
+          manufacture_date?: string | null
+          notes?: string
+          product_id?: string
+          purchase_price?: number
+          selling_price?: number
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_batches_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          batch_number: string
+          category: string
+          created_at: string
+          description: string
+          dosage_form: string
+          expiry_date: string | null
+          generic_name: string
+          id: string
+          manufacturer: string
+          name: string
+          purchase_price: number
+          quantity: number
+          reorder_level: number
+          selling_price: number
+          strength: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          batch_number?: string
           category?: string
           created_at?: string
           description?: string
+          dosage_form?: string
           expiry_date?: string | null
           generic_name?: string
           id?: string
+          manufacturer?: string
+          name: string
+          purchase_price?: number
+          quantity?: number
+          reorder_level?: number
+          selling_price?: number
+          strength?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          batch_number?: string
+          category?: string
+          created_at?: string
+          description?: string
+          dosage_form?: string
+          expiry_date?: string | null
+          generic_name?: string
+          id?: string
+          manufacturer?: string
           name?: string
           purchase_price?: number
           quantity?: number
           reorder_level?: number
           selling_price?: number
+          strength?: string
           supplier_id?: string | null
           updated_at?: string
         }
@@ -225,33 +297,46 @@ export type Database = {
       }
       sale_items: {
         Row: {
+          batch_id: string | null
           id: string
           line_total: number
           name: string
           product_id: string | null
           quantity: number
           sale_id: string
+          unit_cost: number
           unit_price: number
         }
         Insert: {
+          batch_id?: string | null
           id?: string
           line_total: number
           name: string
           product_id?: string | null
           quantity: number
           sale_id: string
+          unit_cost?: number
           unit_price: number
         }
         Update: {
+          batch_id?: string | null
           id?: string
           line_total?: number
           name?: string
           product_id?: string | null
           quantity?: number
           sale_id?: string
+          unit_cost?: number
           unit_price?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "sale_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sale_items_product_id_fkey"
             columns: ["product_id"]
@@ -303,6 +388,47 @@ export type Database = {
           total?: number
         }
         Relationships: []
+      }
+      stock_transactions: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          quantity_change: number
+          reference: string
+          transaction_type: Database["public"]["Enums"]["stock_txn_type"]
+          unit_cost: number | null
+          user_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          quantity_change: number
+          reference?: string
+          transaction_type: Database["public"]["Enums"]["stock_txn_type"]
+          unit_cost?: number | null
+          user_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          quantity_change?: number
+          reference?: string
+          transaction_type?: Database["public"]["Enums"]["stock_txn_type"]
+          unit_cost?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transactions_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_batches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppliers: {
         Row: {
@@ -369,6 +495,14 @@ export type Database = {
       app_role: "owner" | "manager" | "cashier" | "pharmacist"
       movement_type: "in" | "out" | "adjustment"
       payment_method: "cash" | "mobile_money" | "card" | "bank_transfer"
+      stock_txn_type:
+        | "purchase"
+        | "sale"
+        | "return"
+        | "damage"
+        | "expired"
+        | "adjustment"
+        | "opening"
       user_status: "active" | "disabled"
     }
     CompositeTypes: {
@@ -500,6 +634,15 @@ export const Constants = {
       app_role: ["owner", "manager", "cashier", "pharmacist"],
       movement_type: ["in", "out", "adjustment"],
       payment_method: ["cash", "mobile_money", "card", "bank_transfer"],
+      stock_txn_type: [
+        "purchase",
+        "sale",
+        "return",
+        "damage",
+        "expired",
+        "adjustment",
+        "opening",
+      ],
       user_status: ["active", "disabled"],
     },
   },
