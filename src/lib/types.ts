@@ -7,7 +7,7 @@ export interface User {
   phone: string;
   role: Role;
   status: "active" | "disabled";
-  password?: string; // unused with real auth; kept for UI compatibility
+  password?: string;
   createdAt: string;
 }
 
@@ -21,23 +21,72 @@ export interface Supplier {
   createdAt: string;
 }
 
+/**
+ * Product = the medicine identity. Stock and prices are owned by batches.
+ * The following fields are DERIVED from the product's batches at load time:
+ *   quantity, purchasePrice (weighted avg cost), sellingPrice (latest batch),
+ *   expiryDate (earliest non-expired batch), batchNumber (latest batch number).
+ */
 export interface Product {
   id: string;
   name: string;
   genericName: string;
   category: string;
+  manufacturer: string;
+  dosageForm: string;
+  strength: string;
   supplierId: string;
-  purchasePrice: number;
-  sellingPrice: number;
-  quantity: number;
   reorderLevel: number;
-  batchNumber: string;
-  expiryDate: string; // ISO date
+  active: boolean;
   description: string;
   createdAt: string;
   updatedAt: string;
+  // Derived from batches:
+  quantity: number;
+  purchasePrice: number;
+  sellingPrice: number;
+  expiryDate: string;
+  batchNumber: string;
+  stockValue: number;
 }
 
+export interface Batch {
+  id: string;
+  productId: string;
+  supplierId: string;
+  batchNumber: string;
+  manufactureDate: string;
+  expiryDate: string;
+  purchasePrice: number;
+  sellingPrice: number;
+  initialQuantity: number;
+  availableQuantity: number; // computed from transactions
+  notes: string;
+  createdAt: string;
+}
+
+export type StockTxnType =
+  | "purchase"
+  | "sale"
+  | "return"
+  | "damage"
+  | "expired"
+  | "adjustment"
+  | "opening";
+
+export interface StockTransaction {
+  id: string;
+  batchId: string;
+  productId: string; // resolved client-side via batch
+  transactionType: StockTxnType;
+  quantityChange: number;
+  unitCost: number | null;
+  reference: string;
+  userId: string;
+  createdAt: string;
+}
+
+// Legacy compat — surfaced from stock_transactions for UI continuity
 export type MovementType = "in" | "out" | "adjustment";
 export interface InventoryMovement {
   id: string;
@@ -56,9 +105,11 @@ export interface InventoryMovement {
 export type PaymentMethod = "cash" | "mobile_money" | "card" | "bank_transfer";
 export interface SaleItem {
   productId: string;
+  batchId?: string;
   name: string;
   quantity: number;
   unitPrice: number;
+  unitCost: number;
   lineTotal: number;
 }
 export interface Sale {

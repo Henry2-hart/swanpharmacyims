@@ -43,7 +43,7 @@ function POSPage() {
   const filtered = useMemo(
     () =>
       products
-        .filter((p) => p.quantity > 0)
+        .filter((p) => p.active && p.quantity > 0)
         .filter(
           (p) =>
             !q ||
@@ -76,6 +76,7 @@ function POSPage() {
           name: p.name,
           quantity: 1,
           unitPrice: p.sellingPrice,
+          unitCost: p.purchasePrice,
           lineTotal: p.sellingPrice,
         },
       ];
@@ -108,19 +109,23 @@ function POSPage() {
 
   const checkout = async () => {
     if (cart.length === 0) return toast.error("Cart is empty");
-    const sale = await addSale({
-      items: cart,
-      subtotal,
-      discount,
-      tax: taxAmt,
-      total,
-      paymentMethod: pay,
-    });
-    if (!sale) return toast.error("Failed to record sale");
-    toast.success(`Sale ${sale.saleNumber} completed`);
-    setReceipt(sale);
-    setCart([]);
-    setDiscount(0);
+    try {
+      const sale = await addSale({
+        items: cart,
+        subtotal,
+        discount,
+        tax: taxAmt,
+        total,
+        paymentMethod: pay,
+      });
+      if (!sale) return toast.error("Failed to record sale");
+      toast.success(`Sale ${sale.saleNumber} completed`);
+      setReceipt(sale);
+      setCart([]);
+      setDiscount(0);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to record sale");
+    }
   };
 
   return (
