@@ -45,13 +45,9 @@ function ReportsPage() {
   }, [sales, period]);
 
   const totalRevenue = sales.reduce((s, x) => s + x.total, 0);
+  // COGS uses the actual batch cost recorded on each sale line (FEFO).
   const totalCost = sales.reduce(
-    (s, x) =>
-      s +
-      x.items.reduce((sum, i) => {
-        const p = products.find((p) => p.id === i.productId);
-        return sum + (p?.purchasePrice ?? 0) * i.quantity;
-      }, 0),
+    (s, x) => s + x.items.reduce((sum, i) => sum + i.unitCost * i.quantity, 0),
     0,
   );
   const profit = totalRevenue - totalCost;

@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2, Eye } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, Eye, Layers } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { categories } from "@/lib/mock-data";
 import type { Product } from "@/lib/types";
-import { currency, daysUntil, shortDate } from "@/lib/format";
+import { currency, shortDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/products")({
@@ -44,16 +45,21 @@ const empty = (): Product => ({
   name: "",
   genericName: "",
   category: "Analgesics",
+  manufacturer: "",
+  dosageForm: "",
+  strength: "",
   supplierId: "",
-  purchasePrice: 0,
-  sellingPrice: 0,
-  quantity: 0,
   reorderLevel: 10,
-  batchNumber: "",
-  expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10),
+  active: true,
   description: "",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  quantity: 0,
+  purchasePrice: 0,
+  sellingPrice: 0,
+  expiryDate: "",
+  batchNumber: "",
+  stockValue: 0,
 });
 
 function ProductsPage() {
@@ -70,7 +76,7 @@ function ProductsPage() {
         !q ||
         p.name.toLowerCase().includes(q.toLowerCase()) ||
         p.genericName.toLowerCase().includes(q.toLowerCase()) ||
-        p.batchNumber.toLowerCase().includes(q.toLowerCase());
+        p.manufacturer.toLowerCase().includes(q.toLowerCase());
       const matchesCat = cat === "all" || p.category === cat;
       return matchesQ && matchesCat;
     });
@@ -79,34 +85,28 @@ function ProductsPage() {
   const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? "—";
 
   const save = () => {
-    if (!draft.name) {
-      toast.error("Product name is required");
-      return;
-    }
+    if (!draft.name.trim()) return toast.error("Product name is required");
     const dup = products.find(
       (p) =>
         p.id !== draft.id &&
         p.name.trim().toLowerCase() === draft.name.trim().toLowerCase(),
     );
     if (dup) {
-      toast.error(`A product named "${dup.name}" already exists. Use Stock In to add more quantity.`);
+      toast.error(
+        `A product named "${dup.name}" already exists. Add a new batch to it in Inventory.`,
+      );
       return;
     }
-    if (!draft.category?.trim()) {
-      toast.error("Category is required");
-      return;
-    }
+    if (!draft.category?.trim()) return toast.error("Category is required");
     upsertProduct({
       ...draft,
       name: draft.name.trim(),
       category: draft.category.trim(),
-      expiryDate: new Date(draft.expiryDate).toISOString(),
       updatedAt: new Date().toISOString(),
     });
     toast.success("Product saved");
     setOpen(false);
   };
-
 
   return (
     <div className="space-y-4">
@@ -121,11 +121,13 @@ function ProductsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
+            {Array.from(new Set([...categories, ...products.map((p) => p.category)]))
+              .filter(Boolean)
+              .map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
         <Button
@@ -144,46 +146,50 @@ function ProductsPage() {
             <TableRow>
               <TableHead>Product</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Manufacturer</TableHead>
               <TableHead>Supplier</TableHead>
-              <TableHead className="text-right">Stock</TableHead>
+              <TableHead className="text-right">Total Stock</TableHead>
               <TableHead className="text-right">Price</TableHead>
-              <TableHead>Expiry</TableHead>
+              <TableHead>Nearest Expiry</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((p) => {
-              const days = daysUntil(p.expiryDate);
               const isOut = p.quantity === 0;
               const isLow = !isOut && p.quantity <= p.reorderLevel;
-              const isExpired = days < 0;
-              const isExpiring = !isExpired && days <= 90;
               return (
                 <TableRow key={p.id}>
                   <TableCell>
                     <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.genericName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[p.genericName, p.strength, p.dosageForm].filter(Boolean).join(" · ")}
+                    </div>
                   </TableCell>
                   <TableCell>{p.category}</TableCell>
+                  <TableCell>{p.manufacturer || "—"}</TableCell>
                   <TableCell>{supplierName(p.supplierId)}</TableCell>
-                  <TableCell className="text-right">{p.quantity}</TableCell>
+                  <TableCell className="text-right font-medium">{p.quantity}</TableCell>
                   <TableCell className="text-right">{currency(p.sellingPrice)}</TableCell>
-                  <TableCell>{shortDate(p.expiryDate)}</TableCell>
+                  <TableCell>{p.expiryDate ? shortDate(p.expiryDate) : "—"}</TableCell>
                   <TableCell>
-                    {isOut ? (
+                    {!p.active ? (
+                      <Badge variant="secondary">Inactive</Badge>
+                    ) : isOut ? (
                       <Badge variant="destructive">Out</Badge>
-                    ) : isExpired ? (
-                      <Badge variant="destructive">Expired</Badge>
                     ) : isLow ? (
                       <Badge className="bg-warning text-warning-foreground">Low</Badge>
-                    ) : isExpiring ? (
-                      <Badge variant="secondary">Expiring</Badge>
                     ) : (
                       <Badge className="bg-success text-success-foreground">OK</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button asChild variant="ghost" size="icon" title="Manage batches">
+                      <Link to="/inventory" search={{ product: p.id } as never}>
+                        <Layers className="h-4 w-4" />
+                      </Link>
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => setViewing(p)}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -191,7 +197,7 @@ function ProductsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        setDraft({ ...p, expiryDate: p.expiryDate.slice(0, 10) });
+                        setDraft(p);
                         setOpen(true);
                       }}
                     >
@@ -201,7 +207,7 @@ function ProductsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        if (confirm(`Delete ${p.name}?`)) {
+                        if (confirm(`Delete ${p.name}? All its batches will be removed.`)) {
                           deleteProduct(p.id);
                           toast.success("Product deleted");
                         }
@@ -215,7 +221,7 @@ function ProductsPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   No products match your search.
                 </TableCell>
               </TableRow>
@@ -254,8 +260,27 @@ function ProductsPage() {
                   ))}
               </datalist>
             </Field>
-
-            <Field label="Supplier">
+            <Field label="Manufacturer">
+              <Input
+                value={draft.manufacturer}
+                onChange={(e) => setDraft({ ...draft, manufacturer: e.target.value })}
+              />
+            </Field>
+            <Field label="Dosage Form">
+              <Input
+                placeholder="Tablet, syrup, capsule…"
+                value={draft.dosageForm}
+                onChange={(e) => setDraft({ ...draft, dosageForm: e.target.value })}
+              />
+            </Field>
+            <Field label="Strength">
+              <Input
+                placeholder="e.g. 500mg"
+                value={draft.strength}
+                onChange={(e) => setDraft({ ...draft, strength: e.target.value })}
+              />
+            </Field>
+            <Field label="Default Supplier">
               <Select value={draft.supplierId} onValueChange={(v) => setDraft({ ...draft, supplierId: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select supplier" />
@@ -269,27 +294,6 @@ function ProductsPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Purchase Price">
-              <Input
-                type="number"
-                value={draft.purchasePrice}
-                onChange={(e) => setDraft({ ...draft, purchasePrice: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Selling Price">
-              <Input
-                type="number"
-                value={draft.sellingPrice}
-                onChange={(e) => setDraft({ ...draft, sellingPrice: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Quantity">
-              <Input
-                type="number"
-                value={draft.quantity}
-                onChange={(e) => setDraft({ ...draft, quantity: Number(e.target.value) })}
-              />
-            </Field>
             <Field label="Reorder Level">
               <Input
                 type="number"
@@ -297,18 +301,16 @@ function ProductsPage() {
                 onChange={(e) => setDraft({ ...draft, reorderLevel: Number(e.target.value) })}
               />
             </Field>
-            <Field label="Batch Number">
-              <Input
-                value={draft.batchNumber}
-                onChange={(e) => setDraft({ ...draft, batchNumber: e.target.value })}
-              />
-            </Field>
-            <Field label="Expiry Date">
-              <Input
-                type="date"
-                value={draft.expiryDate.slice(0, 10)}
-                onChange={(e) => setDraft({ ...draft, expiryDate: e.target.value })}
-              />
+            <Field label="Active">
+              <div className="flex items-center gap-2 h-9">
+                <Switch
+                  checked={draft.active}
+                  onCheckedChange={(v) => setDraft({ ...draft, active: v })}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {draft.active ? "Sellable" : "Hidden from POS"}
+                </span>
+              </div>
             </Field>
             <div className="sm:col-span-2">
               <Field label="Description">
@@ -318,6 +320,10 @@ function ProductsPage() {
                   onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                 />
               </Field>
+            </div>
+            <div className="sm:col-span-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Stock, batch numbers, expiry dates and pricing are managed per-batch in <b>Inventory</b>.
+              Save this product first, then add a batch via the Inventory page to start stocking it.
             </div>
           </div>
           <DialogFooter>
@@ -336,16 +342,21 @@ function ProductsPage() {
           </DialogHeader>
           {viewing && (
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <Detail label="Generic" value={viewing.genericName} />
+              <Detail label="Generic" value={viewing.genericName || "—"} />
               <Detail label="Category" value={viewing.category} />
-              <Detail label="Supplier" value={supplierName(viewing.supplierId)} />
-              <Detail label="Batch" value={viewing.batchNumber} />
-              <Detail label="Purchase" value={currency(viewing.purchasePrice)} />
-              <Detail label="Selling" value={currency(viewing.sellingPrice)} />
-              <Detail label="Quantity" value={String(viewing.quantity)} />
+              <Detail label="Manufacturer" value={viewing.manufacturer || "—"} />
+              <Detail label="Dosage" value={`${viewing.strength} ${viewing.dosageForm}`.trim() || "—"} />
+              <Detail label="Default Supplier" value={supplierName(viewing.supplierId)} />
               <Detail label="Reorder Level" value={String(viewing.reorderLevel)} />
-              <Detail label="Expiry" value={shortDate(viewing.expiryDate)} />
-              <Detail label="Updated" value={shortDate(viewing.updatedAt)} />
+              <Detail label="Total Stock" value={String(viewing.quantity)} />
+              <Detail label="Stock Value" value={currency(viewing.stockValue)} />
+              <Detail label="Avg Cost" value={currency(viewing.purchasePrice)} />
+              <Detail label="Current Price" value={currency(viewing.sellingPrice)} />
+              <Detail
+                label="Nearest Expiry"
+                value={viewing.expiryDate ? shortDate(viewing.expiryDate) : "—"}
+              />
+              <Detail label="Status" value={viewing.active ? "Active" : "Inactive"} />
               <div className="col-span-2">
                 <div className="text-xs text-muted-foreground">Description</div>
                 <div>{viewing.description || "—"}</div>
