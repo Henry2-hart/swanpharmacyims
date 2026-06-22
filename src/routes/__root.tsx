@@ -16,11 +16,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Swan Pharmacy Inventory & POS" },
+      { title: "MediStock — Pharmacy Inventory & POS" },
       {
         name: "description",
         content:
-          "Modern pharmacy inventory management and point-of-sale system.",
+          "Modern pharmacy inventory management and point-of-sale system with reporting and audit logs.",
       },
     ],
     links: [
