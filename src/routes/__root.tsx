@@ -16,12 +16,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "MediStock — Pharmacy Inventory & POS" },
+      { title: "swanpharmacyims" },
       {
         name: "description",
         content:
           "Modern pharmacy inventory management and point-of-sale system with reporting and audit logs.",
       },
+      { property: "og:title", content: "swanpharmacyims" },
+      { name: "twitter:title", content: "swanpharmacyims" },
+      { name: "description", content: "Pharmacy Flow is a desktop application for managing pharmacy inventory and processing sales." },
+      { property: "og:description", content: "Pharmacy Flow is a desktop application for managing pharmacy inventory and processing sales." },
+      { name: "twitter:description", content: "Pharmacy Flow is a desktop application for managing pharmacy inventory and processing sales." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7e62a03e-7ff4-4d67-9700-5c0b1c6ec10e/id-preview-bd66aa4d--86ca204b-c807-437c-b131-02cda72fec66.lovable.app-1782128701438.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7e62a03e-7ff4-4d67-9700-5c0b1c6ec10e/id-preview-bd66aa4d--86ca204b-c807-437c-b131-02cda72fec66.lovable.app-1782128701438.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
